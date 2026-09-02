@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#17181a">
+<title>Time Clock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    color-scheme: dark;
+    --bg:#17181a;
+    --panel:#212327;
+    --panel-hi:#2a2c31;
+    --bezel:#0e0f10;
+    --yellow:#f5b335;
+    --yellow-deep:#c88a1e;
+    --green:#5fae62;
+    --blue:#6b93a6;
+    --text:#f2efe9;
+    --text-dim:#9a9c9e;
+    --danger:#c8593f;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout:none;}
+  html,body{margin:0; padding:0; overscroll-behavior-y:contain;}
+  body{
+    background:var(--bg); color:var(--text); font-family:'Oswald', sans-serif;
+    min-height:100dvh; display:flex; justify-content:center;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+  .app{
+    width:100%; max-width:460px; padding:0 18px;
+    padding-top: env(safe-area-inset-top);
+    padding-left: calc(18px + env(safe-area-inset-left));
+    padding-right: calc(18px + env(safe-area-inset-right));
+  }
+  button{ -webkit-user-select:none; user-select:none; }
+  .hazard{
+    height:10px; margin:0 -18px 22px -18px;
+    background: repeating-linear-gradient(-45deg, var(--yellow), var(--yellow) 10px, #1a1a1a 10px, #1a1a1a 20px);
+  }
+  header{ text-align:center; margin-bottom:18px; }
+  header h1{ font-size:26px; font-weight:700; letter-spacing:3px; text-transform:uppercase; margin:0; }
+  header p{ font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); margin:4px 0 0 0; }
+
+  .tabs{ display:flex; gap:8px; margin-bottom:20px; }
+  .tab{
+    flex:1; text-align:center; padding:10px 0; border-radius:8px;
+    font-size:13px; letter-spacing:2px; text-transform:uppercase; font-weight:600;
+    background:var(--panel); color:var(--text-dim); cursor:pointer; border:none;
+    font-family:'Oswald', sans-serif;
+  }
+  .tab.active{ background:var(--yellow); color:#3a2500; }
+
+  .readout{
+    background:var(--bezel); border-radius:14px; padding:22px 18px 18px 18px; margin-bottom:18px;
+    border:1px solid #000; box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .client-label{ text-align:center; font-size:13px; color:var(--text-dim); letter-spacing:1px; margin-bottom:10px; text-transform:uppercase; }
+  .client-label b{ color:var(--yellow); text-transform:none; letter-spacing:0; }
+  .status-row{ display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
+  .dot{ width:10px; height:10px; border-radius:50%; background:var(--text-dim); }
+  .dot.working{ background:var(--green); }
+  .dot.break{ background:var(--blue); }
+  .status-label{ font-size:13px; letter-spacing:3px; text-transform:uppercase; font-weight:600; color:var(--text-dim); }
+  .status-label.working{ color:var(--green); }
+  .status-label.break{ color:var(--blue); }
+  .big-time{ font-family:'JetBrains Mono', monospace; font-weight:700; font-size:52px; text-align:center; color:var(--yellow); letter-spacing:1px; line-height:1.1; }
+  .big-time.idle{ color:var(--text-dim); }
+  .big-time.break{ color:var(--blue); }
+  .sub-time{ font-family:'JetBrains Mono', monospace; text-align:center; font-size:13px; color:var(--text-dim); margin-top:8px; letter-spacing:1px; }
+
+  label.field-label{ display:block; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:0 0 6px 2px; }
+  select.client-select, input.job-input, .entry-form input{
+    width:100%; padding:12px; border-radius:10px; border:1px solid var(--panel-hi);
+    background:var(--panel-hi); color:var(--text); font-family:'Oswald', sans-serif; font-size:16px;
+    margin-bottom:12px; -webkit-appearance:none; appearance:none;
+  }
+  input[type="date"], input[type="number"], input[type="time"]{ min-height:44px; }
+  select.client-select{ background:var(--panel); padding:14px; margin-bottom:14px; font-size:16px; }
+  select.client-select:focus, input.job-input:focus, .entry-form input:focus{ outline:none; border-color:var(--yellow); }
+
+  .no-jobs{ background:var(--panel); border-radius:10px; padding:16px; text-align:center; color:var(--text-dim); font-size:13px; margin-bottom:14px; }
+  .no-jobs a{ color:var(--yellow); cursor:pointer; text-decoration:underline; }
+
+  .btn{
+    width:100%; border:none; border-radius:10px; padding:18px 14px; font-family:'Oswald', sans-serif;
+    font-weight:600; font-size:16px; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px;
+    cursor:pointer; transition: transform .05s ease, box-shadow .05s ease; box-shadow: 0 4px 0 rgba(0,0,0,0.35);
+  }
+  .btn:active{ transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+  .btn-clock-in{ background:var(--green); color:#0e2a10; }
+  .btn-clock-out{ background:var(--danger); color:#2c0f08; }
+  .btn-break-start{ background:var(--yellow); color:#3a2500; }
+  .btn-break-stop{ background:var(--blue); color:#0d2430; }
+  .btn:disabled{ background:var(--panel-hi); color:var(--text-dim); box-shadow:none; cursor:not-allowed; }
+  .btn:disabled:active{ transform:none; }
+
+  .btn-newjob, .btn-addhours{
+    width:100%; border:none; border-radius:10px; padding:14px; font-family:'Oswald', sans-serif;
+    font-weight:600; font-size:14px; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px;
+    cursor:pointer; background:var(--yellow); color:#3a2500; box-shadow: 0 4px 0 var(--yellow-deep);
+  }
+  .btn-addhours{ background:var(--blue); box-shadow:0 4px 0 #4d6c7c; color:#0d2430; font-size:12px; padding:10px; margin-top:10px; margin-bottom:4px; }
+  .btn-newjob:active, .btn-addhours:active{ transform: translateY(3px); box-shadow: none; }
+
+  .newjob-form, .entry-form{ background:var(--panel-hi); border-radius:10px; padding:14px; margin-bottom:14px; margin-top:8px; }
+  .newjob-row{ display:flex; gap:8px; }
+  .newjob-row input{ flex:1; margin-bottom:0; }
+  .newjob-row button, .entry-actions button{ padding:0 16px; height:38px; border:none; border-radius:8px; font-family:'Oswald', sans-serif; font-weight:600; letter-spacing:1px; text-transform:uppercase; font-size:13px; cursor:pointer; }
+  .newjob-add, .entry-save{ background:var(--green); color:#0e2a10; }
+  .newjob-cancel, .entry-cancel{ background:var(--bg); color:var(--text-dim); }
+  .newjob-error{ color:var(--danger); font-size:12px; margin-top:8px; }
+  .hm-row{ display:flex; gap:8px; }
+  .hm-row > div{ flex:1; }
+  .entry-actions{ display:flex; gap:8px; margin-top:4px; }
+  .entry-actions button{ flex:1; }
+
+  .folder-actions-row{ display:flex; gap:8px; margin-top:10px; margin-bottom:4px; }
+  .folder-actions-row .btn-addhours{ flex:1; margin:0; }
+  .btn-select{
+    flex:1; border:none; border-radius:10px; padding:10px; font-family:'Oswald', sans-serif;
+    font-weight:600; font-size:12px; letter-spacing:2px; text-transform:uppercase; cursor:pointer;
+    background:var(--panel-hi); color:var(--text-dim);
+  }
+  .btn-select:active{ background:var(--bg); }
+
+  .selection-summary{ display:flex; align-items:center; justify-content:space-between; background:var(--bg); border-radius:8px; padding:10px 12px; margin:10px 0; gap:8px; }
+  .selection-summary .info{ font-size:12px; color:var(--text-dim); }
+  .selection-summary .info b{ color:var(--yellow); font-family:'JetBrains Mono', monospace; }
+  .selection-summary .actions{ display:flex; gap:6px; }
+  .selection-summary button{ padding:8px 14px; border:none; border-radius:6px; font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+  .selection-summary button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .select-row{ display:flex; align-items:flex-start; gap:10px; flex:1; cursor:pointer; }
+  .select-row input[type="checkbox"]{ margin-top:2px; width:18px; height:18px; accent-color:var(--yellow); flex-shrink:0; }
+  .day-check{ width:16px; height:16px; accent-color:var(--yellow); margin-right:8px; }
+  .day-left{ display:flex; align-items:center; }
+
+  .folder{ background:var(--panel); border-radius:10px; margin-bottom:10px; overflow:hidden; }
+  .folder-header{ display:flex; align-items:center; justify-content:space-between; padding:14px 14px; cursor:pointer; }
+  .folder-name{ display:flex; align-items:center; gap:10px; font-size:15px; font-weight:500; }
+  .folder-name i{ color:var(--yellow); font-style:normal; }
+  .orphan-tag{ color:var(--text-dim); font-size:11px; text-transform:none; letter-spacing:0; font-weight:400; }
+  .folder-total{ font-family:'JetBrains Mono', monospace; font-weight:700; color:var(--yellow); font-size:14px; }
+  .folder-chevron{ color:var(--text-dim); font-size:12px; margin-left:10px; }
+  .folder-body{ padding:0 14px 14px 14px; border-top:1px solid var(--panel-hi); }
+  .folder-delete{ background:none; border:none; color:var(--text-dim); font-size:11px; letter-spacing:1px; text-transform:uppercase; text-decoration:underline; cursor:pointer; padding:10px 0 0 0; }
+
+  .confirm-bar{ display:flex; align-items:center; justify-content:space-between; background:var(--bg); border-radius:8px; padding:10px 12px; margin-top:8px; gap:8px; }
+  .confirm-bar span{ font-size:12px; color:var(--text-dim); flex:1; }
+  .confirm-bar button{ padding:6px 12px; border:none; border-radius:6px; font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+  .confirm-yes{ background:var(--danger); color:#2c0f08; }
+  .confirm-no{ background:var(--panel-hi); color:var(--text-dim); }
+
+  .day-group{ margin-top:12px; }
+  .day-heading{ display:flex; justify-content:space-between; align-items:center; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); border-bottom:1px solid var(--panel-hi); padding-bottom:6px; margin-bottom:6px; }
+  .day-total{ font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; color:var(--yellow); letter-spacing:0; text-transform:none; }
+  .day-memo{ font-size:12px; color:var(--text-dim); font-style:italic; margin:-2px 0 8px 0; text-transform:none; letter-spacing:0; }
+  .session-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--bg); gap:8px; }
+  .session-info .range{ font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono', monospace; }
+  .session-info .breakline{ font-size:11px; color:var(--blue); margin-top:1px; }
+  .session-info .memo{ font-size:12px; color:var(--text); margin-top:3px; font-style:italic; }
+  .session-right{ display:flex; align-items:center; gap:6px; }
+  .session-right .hours{ font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; margin-right:4px; }
+  .icon-btn{ background:none; border:none; color:var(--text-dim); font-size:15px; cursor:pointer; padding:4px 6px; }
+  .icon-btn:active{ color:var(--yellow); }
+  .icon-btn.del:active{ color:var(--danger); }
+
+  .save-status{ text-align:center; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin-top:4px; }
+  .save-status.error{ color:var(--danger); cursor:pointer; text-decoration:underline; }
+
+  .empty{ color:var(--text-dim); font-size:13px; text-align:center; padding:24px 0; }
+  .footer{ text-align:center; margin-top:16px; }
+  .clear-link{ background:none; border:none; color:var(--text-dim); font-family:'Oswald', sans-serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; text-decoration:underline; cursor:pointer; padding:8px; }
+  .loading{ text-align:center; color:var(--text-dim); padding:40px 0; font-size:14px; letter-spacing:1px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hazard"></div>
+  <header>
+    <h1>Time Clock</h1>
+    <p>Daily hours tracker</p>
+  </header>
+  <div class="tabs">
+    <button class="tab" id="tabClock">Clock</button>
+    <button class="tab" id="tabHistory">History</button>
+  </div>
+  <div id="root"><div class="loading">Loading...</div></div>
+  <div class="footer" id="footer"></div>
+</div>
+
+<script>
+(function(){
+  var CUR_KEY = 'workclock:current';
+  var SESSIONS_KEY = 'workclock:sessions';
+  var CLIENTS_KEY = 'workclock:clients';
+  var OLD_HIST_KEY = 'workclock:history';
+
+  var current = null;
+  var sessions = [];
+  var clients = [];
+  var view = 'clock';
+  var showNewJobForm = false;
+  var newJobError = '';
+  var expandedClient = null;
+  var addingHoursFor = null;
+  var addHoursError = '';
+  var editingSessionId = null;
+  var editError = '';
+  var pendingDeleteSession = null;
+  var pendingDeleteClient = null;
+  var selectMode = false;
+  var selectedIds = {};
+  var pendingBulkDelete = false;
+  var footerConfirming = false;
+  var ready = false;
+  var tickHandle = null;
+  var saveState = 'idle';
+  var lastRetryFn = null;
+
+  function todayStr(d){
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateLabel(dateStr){
+    var p = dateStr.split('-').map(Number);
+    var d = new Date(p[0], p[1]-1, p[2]);
+    return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+  }
+  function fmtTime(ms){
+    if(!ms) return '';
+    var d = new Date(ms);
+    var h = d.getHours();
+    var m = d.getMinutes();
+    var ap = h >= 12 ? 'pm' : 'am';
+    var h12 = h % 12; if(h12 === 0) h12 = 12;
+    return h12 + (m === 0 ? '' : ':' + pad(m)) + ap;
+  }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function timeStrFromMs(ms){
+    var d = new Date(ms);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function combineDateTime(dateStr, timeStr){
+    return new Date(dateStr + 'T' + timeStr + ':00').getTime();
+  }
+  function msToClock(ms){
+    if(ms < 0) ms = 0;
+    var t = Math.floor(ms/1000);
+    return pad(Math.floor(t/3600)) + ':' + pad(Math.floor((t%3600)/60)) + ':' + pad(t%60);
+  }
+  function msToHoursLabel(ms){
+    if(ms < 0) ms = 0;
+    var totalMin = Math.round(ms/60000);
+    return Math.floor(totalMin/60) + 'h ' + pad(totalMin%60) + 'm';
+  }
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function defaultCurrent(){
+    return { status:'out', client:null, clockInAt:null, workedMs:0, segmentStart:null, breakStart:null, breakMs:0 };
+  }
+
+  async function loadState(){
+    try{
+      var curRes = await window.storage.get(CUR_KEY, false);
+      current = curRes ? JSON.parse(curRes.value) : defaultCurrent();
+    }catch(e){ current = defaultCurrent(); }
+
+    try{
+      var sesRes = await window.storage.get(SESSIONS_KEY, false);
+      sessions = sesRes ? JSON.parse(sesRes.value) : null;
+    }catch(e){ sessions = null; }
+
+    if(sessions === null){
+      sessions = [];
+      try{
+        var oldRes = await window.storage.get(OLD_HIST_KEY, false);
+        if(oldRes){
+          var oldHist = JSON.parse(oldRes.value);
+          Object.keys(oldHist).forEach(function(d){
+            sessions.push({
+              id: 'legacy-' + d, client: 'General', date: d,
+              clockInAt: null, clockOutAt: null,
+              workedMs: oldHist[d].workedMs || 0, breakMs: oldHist[d].breakMs || 0
+            });
+          });
+        }
+      }catch(e){ /* no legacy data */ }
+      await saveSessions();
+    }
+
+    try{
+      var cliRes = await window.storage.get(CLIENTS_KEY, false);
+      clients = cliRes ? JSON.parse(cliRes.value) : null;
+    }catch(e){ clients = null; }
+
+    if(clients === null){
+      var set = {};
+      sessions.forEach(function(s){ if(s.client) set[s.client] = true; });
+      clients = Object.keys(set);
+      await saveClients();
+    }
+
+    ready = true;
+  }
+
+  async function saveCurrent(){
+    saveState = 'saving'; render();
+    try{
+      var res = await window.storage.set(CUR_KEY, JSON.stringify(current), false);
+      if(!res) throw new Error('null result');
+      saveState = 'idle';
+    }catch(e){ console.error('save current failed', e); saveState = 'error'; lastRetryFn = saveCurrent; }
+    render();
+  }
+
+  async function saveSessions(){
+    saveState = 'saving'; render();
+    try{
+      var res = await window.storage.set(SESSIONS_KEY, JSON.stringify(sessions), false);
+      if(!res) throw new Error('null result');
+      saveState = 'idle';
+    }catch(e){ console.error('save sessions failed', e); saveState = 'error'; lastRetryFn = saveSessions; }
+    render();
+  }
+
+  async function saveClients(){
+    saveState = 'saving'; render();
+    try{
+      var res = await window.storage.set(CLIENTS_KEY, JSON.stringify(clients), false);
+      if(!res) throw new Error('null result');
+      saveState = 'idle';
+    }catch(e){ console.error('save clients failed', e); saveState = 'error'; lastRetryFn = saveClients; }
+    render();
+  }
+
+  function addClient(name){
+    var trimmed = (name || '').trim();
+    if(!trimmed){ newJobError = 'Enter a job name first.'; render(); return; }
+    var exists = clients.some(function(c){ return c.toLowerCase() === trimmed.toLowerCase(); });
+    if(exists){ newJobError = 'That job already exists.'; render(); return; }
+    clients.push(trimmed);
+    newJobError = '';
+    showNewJobForm = false;
+    saveClients();
+  }
+
+  function deleteClient(name){
+    clients = clients.filter(function(c){ return c !== name; });
+    if(expandedClient === name) expandedClient = null;
+    pendingDeleteClient = null;
+    saveClients();
+  }
+
+  function clockIn(clientName){
+    if(current.status !== 'out') return;
+    if(!clientName) return;
+    var now = Date.now();
+    current = { status:'in', client:clientName, clockInAt:now, workedMs:0, segmentStart:now, breakStart:null, breakMs:0 };
+    saveCurrent();
+  }
+
+  function startBreak(){
+    if(current.status !== 'in') return;
+    var now = Date.now();
+    current.workedMs += now - current.segmentStart;
+    current.segmentStart = null;
+    current.status = 'break';
+    current.breakStart = now;
+    saveCurrent();
+  }
+
+  function stopBreak(){
+    if(current.status !== 'break') return;
+    var now = Date.now();
+    current.breakMs += now - current.breakStart;
+    current.breakStart = null;
+    current.status = 'in';
+    current.segmentStart = now;
+    saveCurrent();
+  }
+
+  var clockingOutInProgress = false;
+  async function clockOut(){
+    if(current.status === 'out' || clockingOutInProgress) return;
+    clockingOutInProgress = true;
+    var now = Date.now();
+    var workedMs = current.workedMs + (current.status === 'in' ? now - current.segmentStart : 0);
+    var breakMs = current.breakMs + (current.status === 'break' ? now - current.breakStart : 0);
+    var record = {
+      id: 'ses-' + current.clockInAt, client: current.client, date: todayStr(new Date(current.clockInAt)),
+      clockInAt: current.clockInAt, clockOutAt: now, workedMs: workedMs, breakMs: breakMs
+    };
+    sessions.unshift(record);
+    await saveSessions();
+    if(saveState === 'error'){ sessions.shift(); clockingOutInProgress = false; render(); return; }
+    current = defaultCurrent();
+    await saveCurrent();
+    clockingOutInProgress = false;
+    render();
+  }
+
+  function deleteSession(id){
+    sessions = sessions.filter(function(s){ return s.id !== id; });
+    pendingDeleteSession = null;
+    saveSessions();
+  }
+
+  function toggleSelectMode(){
+    selectMode = !selectMode;
+    selectedIds = {};
+    pendingBulkDelete = false;
+    render();
+  }
+
+  function toggleSessionSelect(id){
+    if(selectedIds[id]) delete selectedIds[id];
+    else selectedIds[id] = true;
+    render();
+  }
+
+  function toggleDaySelect(dayIds){
+    var allSelected = dayIds.every(function(id){ return selectedIds[id]; });
+    dayIds.forEach(function(id){
+      if(allSelected) delete selectedIds[id];
+      else selectedIds[id] = true;
+    });
+    render();
+  }
+
+  function selectedSummary(){
+    var ids = Object.keys(selectedIds);
+    var count = ids.length;
+    var total = sessions.filter(function(s){ return selectedIds[s.id]; }).reduce(function(sum, s){ return sum + (s.workedMs || 0); }, 0);
+    return { count: count, total: total };
+  }
+
+  function bulkDeleteSelected(){
+    sessions = sessions.filter(function(s){ return !selectedIds[s.id]; });
+    selectedIds = {};
+    pendingBulkDelete = false;
+    selectMode = false;
+    saveSessions();
+  }
+
+  function submitAddHours(client){
+    var dateEl = document.getElementById('addDate');
+    var startEl = document.getElementById('addStart');
+    var endEl = document.getElementById('addEnd');
+    var bEl = document.getElementById('addBreak');
+    var memoEl = document.getElementById('addMemo');
+    var dateVal = dateEl ? dateEl.value : '';
+    var startVal = startEl ? startEl.value : '';
+    var endVal = endEl ? endEl.value : '';
+    var b = bEl ? parseInt(bEl.value, 10) || 0 : 0;
+    var memo = memoEl ? memoEl.value.trim() : '';
+    if(!dateVal){ addHoursError = 'Pick a date first.'; render(); return; }
+    if(!startVal || !endVal){ addHoursError = 'Enter both a clock-in and clock-out time.'; render(); return; }
+    var clockInAt = combineDateTime(dateVal, startVal);
+    var clockOutAt = combineDateTime(dateVal, endVal);
+    if(clockOutAt <= clockInAt){ addHoursError = 'Clock-out must be after clock-in.'; render(); return; }
+    var breakMs = b * 60000;
+    var workedMs = (clockOutAt - clockInAt) - breakMs;
+    if(workedMs <= 0){ addHoursError = "Break can't be longer than the shift."; render(); return; }
+    var record = {
+      id: 'ses-manual-' + Date.now(), client: client, date: dateVal,
+      clockInAt: clockInAt, clockOutAt: clockOutAt, workedMs: workedMs, breakMs: breakMs, note: memo
+    };
+    sessions.unshift(record);
+    addingHoursFor = null;
+    addHoursError = '';
+    saveSessions();
+  }
+
+  function submitEdit(id){
+    var dateEl = document.getElementById('editDate');
+    var startEl = document.getElementById('editStart');
+    var endEl = document.getElementById('editEnd');
+    var bEl = document.getElementById('editBreak');
+    var memoEl = document.getElementById('editMemo');
+    var dateVal = dateEl ? dateEl.value : '';
+    var startVal = startEl ? startEl.value : '';
+    var endVal = endEl ? endEl.value : '';
+    var b = bEl ? parseInt(bEl.value, 10) || 0 : 0;
+    var memo = memoEl ? memoEl.value.trim() : '';
+    if(!dateVal){ editError = 'Pick a date first.'; render(); return; }
+    if(!startVal || !endVal){ editError = 'Enter both a clock-in and clock-out time.'; render(); return; }
+    var clockInAt = combineDateTime(dateVal, startVal);
+    var clockOutAt = combineDateTime(dateVal, endVal);
+    if(clockOutAt <= clockInAt){ editError = 'Clock-out must be after clock-in.'; render(); return; }
+    var breakMs = b * 60000;
+    var workedMs = (clockOutAt - clockInAt) - breakMs;
+    if(workedMs <= 0){ editError = "Break can't be longer than the shift."; render(); return; }
+    var s = sessions.find(function(x){ return x.id === id; });
+    if(!s) return;
+    s.date = dateVal;
+    s.clockInAt = clockInAt;
+    s.clockOutAt = clockOutAt;
+    s.workedMs = workedMs;
+    s.breakMs = breakMs;
+    s.note = memo;
+    editingSessionId = null;
+    editError = '';
+    saveSessions();
+  }
+
+  async function clearAll(){
+    current = defaultCurrent();
+    sessions = [];
+    clients = [];
+    footerConfirming = false;
+    await saveCurrent();
+    await saveSessions();
+    await saveClients();
+    renderFooter();
+  }
+
+  function liveWorkedMs(){
+    if(current.status === 'out') return current.workedMs;
+    var now = Date.now();
+    return current.workedMs + (current.status === 'in' ? now - current.segmentStart : 0);
+  }
+  function liveBreakMs(){
+    if(current.status !== 'break') return current.breakMs;
+    return current.breakMs + (Date.now() - current.breakStart);
+  }
+
+  function renderSaveStatus(){
+    if(saveState === 'saving') return '<div class="save-status">Saving...</div>';
+    if(saveState === 'error') return '<div class="save-status error" id="retrySave">Save failed &mdash; tap to retry</div>';
+    return '<div class="save-status">All changes saved</div>';
+  }
+
+  function renderClock(){
+    var status = current.status;
+    var statusText = status === 'in' ? 'Working' : (status === 'break' ? 'On break' : 'Clocked out');
+    var dotClass = status === 'in' ? 'working' : (status === 'break' ? 'break' : '');
+    var mainMs = liveWorkedMs();
+    var mainClass = status === 'break' ? 'break' : (status === 'out' ? 'idle' : '');
+    var breakLine = status === 'break' ? '<div class="sub-time">Break time: ' + msToClock(liveBreakMs()) + '</div>' : '';
+    var clientLine = status !== 'out' ? '<div class="client-label">Working for <b>' + esc(current.client) + '</b></div>' : '';
+
+    var clockBtnLabel = clockingOutInProgress ? 'Clocking out...' : (status === 'out' ? 'Clock in' : 'Clock out');
+    var clockBtnClass = status === 'out' ? 'btn-clock-in' : 'btn-clock-out';
+    var breakBtn = status === 'break' ? 'End break' : 'Start break';
+    var breakBtnClass = status === 'break' ? 'btn-break-stop' : 'btn-break-start';
+    var breakDisabled = (status !== 'in' && status !== 'break') || clockingOutInProgress;
+
+    var selectField = '';
+    if(status === 'out'){
+      if(clients.length === 0){
+        selectField = '<div class="no-jobs">No jobs yet. Head to <a id="goHistory">History</a> and tap "New job" to create one.</div>';
+      } else {
+        var opts = '<option value="">Select a job</option>' + clients.slice().sort().map(function(c){
+          return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+        }).join('');
+        selectField =
+          '<label class="field-label" for="clientSelect">Clocking in for</label>' +
+          '<select class="client-select" id="clientSelect">' + opts + '</select>';
+      }
+    }
+
+    var clockDisabled = (status === 'out' && clients.length === 0) || clockingOutInProgress;
+
+    return (
+      selectField +
+      '<div class="readout">' +
+        clientLine +
+        '<div class="status-row"><span class="dot ' + dotClass + '"></span><span class="status-label ' + dotClass + '">' + statusText + '</span></div>' +
+        '<div class="big-time ' + mainClass + '">' + msToClock(mainMs) + '</div>' +
+        breakLine +
+      '</div>' +
+      '<button class="btn ' + clockBtnClass + '" id="clockBtn" ' + (clockDisabled ? 'disabled' : '') + '>' + clockBtnLabel + '</button>' +
+      '<button class="btn ' + breakBtnClass + '" id="breakBtn" ' + (breakDisabled ? 'disabled' : '') + '>' + breakBtn + '</button>' +
+      renderSaveStatus()
+    );
+  }
+
+  function renderEntryForm(prefix, client, dateVal, startVal, endVal, bVal, memoVal, error, saveHandlerId, cancelHandlerId){
+    return (
+      '<div class="entry-form">' +
+        '<label class="field-label">Date</label>' +
+        '<input type="date" id="' + prefix + 'Date" value="' + esc(dateVal) + '">' +
+        '<div class="hm-row">' +
+          '<div><label class="field-label">Clock in</label><input type="time" id="' + prefix + 'Start" value="' + esc(startVal) + '"></div>' +
+          '<div><label class="field-label">Clock out</label><input type="time" id="' + prefix + 'End" value="' + esc(endVal) + '"></div>' +
+        '</div>' +
+        '<label class="field-label">Break (minutes)</label>' +
+        '<input type="number" min="0" id="' + prefix + 'Break" value="' + bVal + '">' +
+        '<label class="field-label">Memo</label>' +
+        '<input type="text" id="' + prefix + 'Memo" value="' + esc(memoVal || '') + '" placeholder="(Optional)">' +
+        (error ? '<div class="newjob-error">' + esc(error) + '</div>' : '') +
+        '<div class="entry-actions">' +
+          '<button class="entry-save" id="' + saveHandlerId + '">Save</button>' +
+          '<button class="entry-cancel" id="' + cancelHandlerId + '">Cancel</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderSessionsForClient(clientName){
+    var list = sessions.filter(function(s){ return s.client === clientName; });
+    if(list.length === 0) return '<div class="empty">No sessions logged yet.</div>';
+    var byDate = {}; var order = [];
+    list.slice().sort(function(a,b){ return (b.clockInAt||0) - (a.clockInAt||0) || (b.date < a.date ? -1 : 1); }).forEach(function(s){
+      if(!byDate[s.date]){ byDate[s.date] = []; order.push(s.date); }
+      byDate[s.date].push(s);
+    });
+    order.sort().reverse();
+    return order.map(function(d){
+      var rows = byDate[d].map(function(s){
+        if(editingSessionId === s.id){
+          var startVal, endVal;
+          if(s.clockInAt && s.clockOutAt){
+            startVal = timeStrFromMs(s.clockInAt);
+            endVal = timeStrFromMs(s.clockOutAt);
+          } else {
+            startVal = '09:00';
+            var totalMin = Math.round(((s.workedMs||0) + (s.breakMs||0)) / 60000);
+            var endMin = (9*60 + totalMin) % (24*60);
+            endVal = pad(Math.floor(endMin/60)) + ':' + pad(endMin%60);
+          }
+          return renderEntryForm('edit', clientName, s.date, startVal, endVal, Math.round((s.breakMs||0)/60000), s.note || '', editError, 'editSave', 'editCancel');
+        }
+        if(pendingDeleteSession === s.id){
+          return '<div class="confirm-bar"><span>Delete this entry?</span><button class="confirm-yes" data-id="' + s.id + '" id="confirmDelSessionYes">Yes</button><button class="confirm-no" id="confirmDelSessionNo">No</button></div>';
+        }
+        var range = (s.clockInAt && s.clockOutAt) ? (fmtTime(s.clockInAt) + ' - ' + fmtTime(s.clockOutAt)) : '';
+        var breakInfo = s.breakMs > 0 ? ('Break: ' + msToHoursLabel(s.breakMs)) : '';
+        var infoBlock =
+          '<div class="session-info">' +
+            (range ? '<div class="range">' + range + '</div>' : '') +
+            (breakInfo ? '<div class="breakline">' + breakInfo + '</div>' : '') +
+          '</div>';
+        if(selectMode){
+          return (
+            '<div class="session-row">' +
+              '<label class="select-row">' +
+                '<input type="checkbox" class="session-check" data-id="' + s.id + '" ' + (selectedIds[s.id] ? 'checked' : '') + '>' +
+                infoBlock +
+              '</label>' +
+              '<div class="session-right"><span class="hours">' + msToHoursLabel(s.workedMs) + '</span></div>' +
+            '</div>'
+          );
+        }
+        return (
+          '<div class="session-row">' +
+            infoBlock +
+            '<div class="session-right">' +
+              '<span class="hours">' + msToHoursLabel(s.workedMs) + '</span>' +
+              '<button class="icon-btn" data-id="' + s.id + '" data-act="edit" aria-label="Edit entry">&#9998;</button>' +
+              '<button class="icon-btn del" data-id="' + s.id + '" data-act="del" aria-label="Delete entry">&times;</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+      var dayTotal = byDate[d].reduce(function(sum, s){ return sum + (s.workedMs || 0); }, 0);
+      var dayIds = byDate[d].map(function(s){ return s.id; });
+      var daySelected = selectMode && dayIds.length > 0 && dayIds.every(function(id){ return selectedIds[id]; });
+      var dayCheckbox = selectMode ? '<input type="checkbox" class="day-check" data-day="' + d + '" ' + (daySelected ? 'checked' : '') + '>' : '';
+      var dayMemos = byDate[d].map(function(s){ return s.note; }).filter(function(n){ return n; });
+      var dayMemoLine = dayMemos.length ? ('<div class="day-memo">' + dayMemos.map(esc).join(' &middot; ') + '</div>') : '';
+      return '<div class="day-group"><div class="day-heading"><span class="day-left">' + dayCheckbox + fmtDateLabel(d) + '</span><span class="day-total">' + msToHoursLabel(dayTotal) + '</span></div>' + dayMemoLine + rows + '</div>';
+    }).join('');
+  }
+
+  function renderHistory(){
+    var newJobBtn = '<button class="btn-newjob" id="newJobBtn">+ New job</button>';
+    var newJobForm = '';
+    if(showNewJobForm){
+      newJobForm =
+        '<div class="newjob-form">' +
+          '<div class="newjob-row">' +
+            '<input type="text" id="newJobInput" placeholder="e.g. Smith residence" autocomplete="off">' +
+            '<button class="newjob-add" id="newJobAdd">Add</button>' +
+            '<button class="newjob-cancel" id="newJobCancel">Cancel</button>' +
+          '</div>' +
+          (newJobError ? '<div class="newjob-error">' + esc(newJobError) + '</div>' : '') +
+        '</div>';
+    }
+
+    var orphanNames = [];
+    sessions.forEach(function(s){
+      if(clients.indexOf(s.client) === -1 && orphanNames.indexOf(s.client) === -1){ orphanNames.push(s.client); }
+    });
+    var allNames = clients.concat(orphanNames).sort();
+
+    if(allNames.length === 0){
+      return newJobBtn + newJobForm + '<div class="empty">No jobs yet. Tap "New job" to create your first one.</div>' + renderSaveStatus();
+    }
+
+    var totals = {};
+    allNames.forEach(function(c){ totals[c] = 0; });
+    sessions.forEach(function(s){ totals[s.client] = (totals[s.client] || 0) + s.workedMs; });
+
+    var folders = allNames.map(function(c){
+      var isOrphan = clients.indexOf(c) === -1;
+      var isOpen = expandedClient === c;
+      var body = '';
+      if(isOpen){
+        var topSection = '';
+        if(addingHoursFor === c){
+          topSection = renderEntryForm('add', c, todayStr(), '09:00', '17:00', 0, '', addHoursError, 'addHoursSave', 'addHoursCancel');
+        } else if(selectMode){
+          if(pendingBulkDelete){
+            var sum = selectedSummary();
+            topSection = '<div class="confirm-bar"><span>Delete ' + sum.count + ' ' + (sum.count === 1 ? 'entry' : 'entries') + ' (' + msToHoursLabel(sum.total) + ')?</span><button class="confirm-yes" id="bulkDeleteYes">Yes</button><button class="confirm-no" id="bulkDeleteNo">No</button></div>';
+          } else {
+            var sel = selectedSummary();
+            topSection =
+              '<div class="selection-summary">' +
+                '<span class="info">' + sel.count + ' selected &middot; <b>' + msToHoursLabel(sel.total) + '</b></span>' +
+                '<div class="actions">' +
+                  '<button class="entry-save" id="bulkDeleteBtn" ' + (sel.count === 0 ? 'disabled' : '') + '>Delete</button>' +
+                  '<button class="entry-cancel" id="selectCancelBtn">Cancel</button>' +
+                '</div>' +
+              '</div>';
+          }
+        } else {
+          var noteHtml = isOrphan ? '<div class="no-jobs">This job was deleted &mdash; history is kept below.</div>' : '';
+          var addHoursBtnHtml = isOrphan ? '' : ('<button class="btn-addhours" data-client="' + esc(c) + '" id="addHoursBtn-' + esc(c) + '">+ Add hours</button>');
+          topSection =
+            noteHtml +
+            '<div class="folder-actions-row">' +
+              addHoursBtnHtml +
+              '<button class="btn-select" data-client="' + esc(c) + '" id="selectToggleBtn-' + esc(c) + '">Select</button>' +
+            '</div>';
+        }
+        var deleteSection = '';
+        if(pendingDeleteClient === c){
+          deleteSection = '<div class="confirm-bar"><span>Delete this job? History stays.</span><button class="confirm-yes" data-client="' + esc(c) + '" id="confirmDelClientYes">Yes</button><button class="confirm-no" id="confirmDelClientNo">No</button></div>';
+        } else if(!selectMode && !isOrphan) {
+          deleteSection = '<button class="folder-delete" data-client="' + esc(c) + '">Delete this job</button>';
+        }
+        body =
+          '<div class="folder-body">' +
+            topSection +
+            renderSessionsForClient(c) +
+            deleteSection +
+          '</div>';
+      }
+      var nameTag = isOrphan ? ' <span class="orphan-tag">(deleted)</span>' : '';
+      return (
+        '<div class="folder">' +
+          '<div class="folder-header" data-client="' + esc(c) + '">' +
+            '<div class="folder-name"><i>&#128193;</i>' + esc(c) + nameTag + '</div>' +
+            '<div><span class="folder-total">' + msToHoursLabel(totals[c] || 0) + '</span><span class="folder-chevron">' + (isOpen ? '&#9650;' : '&#9660;') + '</span></div>' +
+          '</div>' +
+          body +
+        '</div>'
+      );
+    }).join('');
+
+    return newJobBtn + newJobForm + folders + renderSaveStatus();
+  }
+
+  function bindEntryFormHandlers(root, client, sessionIdForEdit){
+    var addBtn = document.getElementById('addHoursSave');
+    if(addBtn){ addBtn.onclick = function(){ submitAddHours(client); }; }
+    var addCancel = document.getElementById('addHoursCancel');
+    if(addCancel){ addCancel.onclick = function(){ addingHoursFor = null; addHoursError = ''; render(); }; }
+    var editSave = document.getElementById('editSave');
+    if(editSave){ editSave.onclick = function(){ submitEdit(sessionIdForEdit); }; }
+    var editCancel = document.getElementById('editCancel');
+    if(editCancel){ editCancel.onclick = function(){ editingSessionId = null; editError = ''; render(); }; }
+  }
+
+  function render(){
+    document.getElementById('tabClock').className = 'tab' + (view === 'clock' ? ' active' : '');
+    document.getElementById('tabHistory').className = 'tab' + (view === 'history' ? ' active' : '');
+    var root = document.getElementById('root');
+    root.innerHTML = view === 'clock' ? renderClock() : renderHistory();
+
+    if(view === 'clock'){
+      var clockBtn = document.getElementById('clockBtn');
+      if(clockBtn){
+        clockBtn.onclick = function(){
+          if(current.status === 'out'){
+            var sel = document.getElementById('clientSelect');
+            var val = sel ? sel.value : '';
+            if(!val){ return; }
+            clockIn(val);
+          } else {
+            clockOut();
+          }
+        };
+      }
+      var breakBtn = document.getElementById('breakBtn');
+      if(breakBtn){ breakBtn.onclick = function(){ current.status === 'break' ? stopBreak() : startBreak(); }; }
+      var goHistory = document.getElementById('goHistory');
+      if(goHistory){ goHistory.onclick = function(){ view = 'history'; showNewJobForm = true; render(); }; }
+    } else {
+      var newJobBtn = document.getElementById('newJobBtn');
+      if(newJobBtn){ newJobBtn.onclick = function(){ showNewJobForm = !showNewJobForm; newJobError = ''; render(); }; }
+      var newJobAdd = document.getElementById('newJobAdd');
+      if(newJobAdd){ newJobAdd.onclick = function(){ var input = document.getElementById('newJobInput'); addClient(input ? input.value : ''); }; }
+      var newJobCancel = document.getElementById('newJobCancel');
+      if(newJobCancel){ newJobCancel.onclick = function(){ showNewJobForm = false; newJobError = ''; render(); }; }
+      var newJobInput = document.getElementById('newJobInput');
+      if(newJobInput){
+        newJobInput.focus();
+        newJobInput.onkeydown = function(e){ if(e.key === 'Enter') addClient(newJobInput.value); };
+      }
+
+      var headers = root.querySelectorAll('.folder-header');
+      headers.forEach(function(h){
+        h.onclick = function(){
+          var c = h.getAttribute('data-client');
+          expandedClient = expandedClient === c ? null : c;
+          addingHoursFor = null; editingSessionId = null; pendingDeleteSession = null; pendingDeleteClient = null;
+          selectMode = false; selectedIds = {}; pendingBulkDelete = false;
+          render();
+        };
+      });
+
+      var addHoursBtns = root.querySelectorAll('.btn-addhours');
+      addHoursBtns.forEach(function(b){
+        b.onclick = function(e){
+          e.stopPropagation();
+          addingHoursFor = b.getAttribute('data-client');
+          addHoursError = '';
+          render();
+        };
+      });
+
+      var delClientBtns = root.querySelectorAll('.folder-delete');
+      delClientBtns.forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); pendingDeleteClient = b.getAttribute('data-client'); render(); }; });
+
+      var confirmClientYes = document.getElementById('confirmDelClientYes');
+      if(confirmClientYes){ confirmClientYes.onclick = function(e){ e.stopPropagation(); deleteClient(confirmClientYes.getAttribute('data-client')); }; }
+      var confirmClientNo = document.getElementById('confirmDelClientNo');
+      if(confirmClientNo){ confirmClientNo.onclick = function(e){ e.stopPropagation(); pendingDeleteClient = null; render(); }; }
+
+      var iconBtns = root.querySelectorAll('.icon-btn');
+      iconBtns.forEach(function(b){
+        b.onclick = function(e){
+          e.stopPropagation();
+          var id = b.getAttribute('data-id');
+          var act = b.getAttribute('data-act');
+          if(act === 'del'){ pendingDeleteSession = id; editingSessionId = null; render(); }
+          else { editingSessionId = id; editError = ''; pendingDeleteSession = null; render(); }
+        };
+      });
+
+      var confirmSessionYes = document.getElementById('confirmDelSessionYes');
+      if(confirmSessionYes){ confirmSessionYes.onclick = function(e){ e.stopPropagation(); deleteSession(confirmSessionYes.getAttribute('data-id')); }; }
+      var confirmSessionNo = document.getElementById('confirmDelSessionNo');
+      if(confirmSessionNo){ confirmSessionNo.onclick = function(e){ e.stopPropagation(); pendingDeleteSession = null; render(); }; }
+
+      var selectToggleBtns = root.querySelectorAll('.btn-select');
+      selectToggleBtns.forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); toggleSelectMode(); }; });
+
+      var sessionChecks = root.querySelectorAll('.session-check');
+      sessionChecks.forEach(function(cb){
+        cb.onclick = function(e){ e.stopPropagation(); };
+        cb.onchange = function(e){ e.stopPropagation(); toggleSessionSelect(cb.getAttribute('data-id')); };
+      });
+
+      var dayChecks = root.querySelectorAll('.day-check');
+      dayChecks.forEach(function(cb){
+        cb.onclick = function(e){ e.stopPropagation(); };
+        cb.onchange = function(e){
+          e.stopPropagation();
+          var day = cb.getAttribute('data-day');
+          var ids = sessions.filter(function(s){ return s.date === day && s.client === expandedClient; }).map(function(s){ return s.id; });
+          toggleDaySelect(ids);
+        };
+      });
+
+      var bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+      if(bulkDeleteBtn){ bulkDeleteBtn.onclick = function(e){ e.stopPropagation(); pendingBulkDelete = true; render(); }; }
+      var selectCancelBtn = document.getElementById('selectCancelBtn');
+      if(selectCancelBtn){ selectCancelBtn.onclick = function(e){ e.stopPropagation(); toggleSelectMode(); }; }
+      var bulkDeleteYes = document.getElementById('bulkDeleteYes');
+      if(bulkDeleteYes){ bulkDeleteYes.onclick = function(e){ e.stopPropagation(); bulkDeleteSelected(); }; }
+      var bulkDeleteNo = document.getElementById('bulkDeleteNo');
+      if(bulkDeleteNo){ bulkDeleteNo.onclick = function(e){ e.stopPropagation(); pendingBulkDelete = false; render(); }; }
+
+      bindEntryFormHandlers(root, addingHoursFor, editingSessionId);
+    }
+    var retry = document.getElementById('retrySave');
+    if(retry){ retry.onclick = function(){ if(lastRetryFn) lastRetryFn(); }; }
+  }
+
+  function renderFooter(){
+    var footer = document.getElementById('footer');
+    if(footerConfirming){
+      footer.innerHTML = '<div class="confirm-bar"><span>Clear all history and jobs?</span><button class="confirm-yes" id="clearYes">Yes</button><button class="confirm-no" id="clearNo">No</button></div>';
+      document.getElementById('clearYes').onclick = function(){ clearAll(); render(); };
+      document.getElementById('clearNo').onclick = function(){ footerConfirming = false; renderFooter(); };
+    } else {
+      footer.innerHTML = '<button class="clear-link" id="clearBtn">Clear all history</button>';
+      document.getElementById('clearBtn').onclick = function(){ footerConfirming = true; renderFooter(); };
+    }
+  }
+
+  function tick(){
+    if(!ready || view !== 'clock') return;
+    if(current.status === 'in' || current.status === 'break') render();
+  }
+
+  async function init(){
+    await loadState();
+    render();
+    renderFooter();
+    tickHandle = setInterval(tick, 1000);
+    document.getElementById('tabClock').onclick = function(){ view = 'clock'; render(); };
+    document.getElementById('tabHistory').onclick = function(){ view = 'history'; render(); };
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
